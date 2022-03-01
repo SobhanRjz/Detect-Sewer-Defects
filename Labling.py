@@ -22,7 +22,7 @@ with open(filename, "a+") , open(filename, "r") as file:
     try :
         data = json.load(file)
         index = max([ int(x) for x in data.keys()])
-    except:  
+    except:  f
         data = {}
 initial_count = 0
 dir = Path
