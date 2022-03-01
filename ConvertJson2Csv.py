@@ -4,6 +4,8 @@ import json
 import csv
 import os
 
+from numpy import matrix
+
 
 def ReadJsonFile(Path):
     with open(Path, "r") as file:
@@ -29,6 +31,7 @@ def PrepareDataMatrix(data):
         Catindex = [Catagories.index(i) if i in Catagories else None for i in item["Categories"]]
         for i in Catindex: ImageProp[i] = 1
         MatrixList.append(ImageProp) 
+    return MatrixList
 
 def GetHeader():
     return ['Image Name', 'Deposit', 'OpenJoint' , 'Washing', 'Spalling', 'Deformation', 'AttachedDeposit']
@@ -37,8 +40,8 @@ def Main():
     JsonPath = "H:\Video\PyProject\Labeled.json"
     CsvFPath = "H:\Video\PyProject\CSVLabeled.csv"
     data = ReadJsonFile(JsonPath)
-
-    WriteData2CSV(CsvFPath, data)
+    MatrixData = PrepareDataMatrix(data)
+    WriteData2CSV(CsvFPath, MatrixData)
 
 
 if __name__ == "__main__":
