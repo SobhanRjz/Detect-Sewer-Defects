@@ -1,2 +1,2 @@
 # Detect-Sewer-Defects
-This app should recognize sewer defects by using deep learning
+This app Can recognize sewer defects by using deep learning
