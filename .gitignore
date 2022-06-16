@@ -1,2 +1,9 @@
-env
+/env
+/HogDetect/VideoTest
+/AllFeatures_GLCM.zip
+/CombineFeatures.rar
+/GLCM.rar
+/PyProject.rar
+/.vscode
+
 ImageSample\*.jpg
