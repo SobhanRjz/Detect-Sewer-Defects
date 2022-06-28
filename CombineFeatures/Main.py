@@ -24,9 +24,12 @@ from sklearn.metrics import confusion_matrix
 from sklearn.svm import SVC  
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import classification_report, confusion_matrix  
+from sklearn.preprocessing import StandardScaler
 from skimage.feature import local_binary_pattern
+from itertools import permutations
 from scipy.cluster.vq import kmeans,vq
-_IsDataFrameExist = False
+
+_IsDataFrameExist = True
 _IsModelExist = False
 OutPutPath = r"H:\Video\PyProject\CombineFeatures\OutPuts"
 
@@ -274,9 +277,6 @@ def SVMModel(x_train, y_train, x_test, y_test):
     cm = confusion_matrix(y_test, test_prediction)
     
 
-
-
-
 def Main():
     
     SIZE = (500, 300)
@@ -288,12 +288,36 @@ def Main():
     (trainData, testData, trainLabels, testLabels) = train_test_split(
         np.array(train_images), train_labels, test_size=0.20, random_state=42)
     # TrainFeatures
-    FeatureList = ["ORB", "KAZE"]
-    train_dataset = FeatureExtraction(trainData, "Train_" + "_".join(FeatureList), FeatureList)
+    FeatureNameList = [ "HOG", "GLCM", "SIFT","ORB", "KAZE", "LBP"]
+    # FeatureList = ["HOG", "SIFT"]
+    train_dataset = FeatureExtraction(trainData, "Train_" + "_".join(FeatureNameList), FeatureNameList)
     # TestFeatures
-    test_features = FeatureExtraction(testData, "Test_" + "_".join(FeatureList), FeatureList)
+    test_features = FeatureExtraction(testData, "Test_" + "_".join(FeatureNameList), FeatureNameList)
 
-    
+    Combination = []
+    for i in range(1,len(FeatureNameList) + 1):
+        for group in permutations(FeatureNameList, i):
+            Combination.append(' '.join(group))
+    print(len(Combination))
+    FeatureDataDic = {}
+    for FNL in FeatureNameList:
+        IndexList = [i for i,x in enumerate(list(train_dataset.columns)) if ''.join([i for i in x if not i.isdigit()]) in FNL]
+        temp = train_dataset.iloc[:,IndexList[0] : IndexList[-1] + 1]
+        FeatureDataDic[FNL] = temp
+    for Feat in Combination:
+        Features = Feat.split()
+        df = pd.DataFrame()
+        for d in Features:
+            df1 = FeatureDataDic[d]
+            df = pd.concat([df, df1], axis = 1)
+
+    SSTrain = StandardScaler()
+    SSTrain.fit(train_dataset)
+    train_dataset = SSTrain.transform(train_dataset);
+    SSTest = StandardScaler()
+    SSTest.fit(test_features)
+    test_features = SSTrain.transform(test_features);
+
     le = preprocessing.LabelEncoder()
     le.fit(trainLabels)
     train_labels_encoded = le.transform(trainLabels)
