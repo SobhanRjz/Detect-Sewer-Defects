@@ -1,6 +1,9 @@
+import json
 from importlib.resources import path
+import pickle
 from threading import Thread
 import sys
+import pandas as pd
 import cv2
 from queue import Queue
 from imutils.video import FileVideoStream
@@ -8,48 +11,51 @@ from imutils.video import FPS
 import numpy as np
 import imutils
 import time
-# class FileVideoStream:
-#     def __init__(self, path, queueSize=128):
-#         # initialize the file video stream along with the boolean
-#         # used to indicate if the thread should be stopped or not
-#         self.stream = cv2.VideoCapture(path)
-#         self.stopped = False
-#         # initialize the queue used to store frames read from
-#         # the video file
-#         self.Q = Queue(maxsize=queueSize)
-#     def start(self):
-#         # start a thread to read frames from the file video stream
-#         t = Thread(target=self.update, args=())
-#         t.daemon = True
-#         t.start()
-#         return self
-#     def update(self):
-#         # keep looping infinitely
-#         while True:
-#             # if the thread indicator variable is set, stop the
-#             # thread
-#             if self.stopped:
-#                 return
-#             # otherwise, ensure the queue has room in it
-#             if not self.Q.full():
-#                 # read the next frame from the file
-#                 (grabbed, frame) = self.stream.read()
-#                 # if the `grabbed` boolean is `False`, then we have
-#                 # reached the end of the video file
-#                 if not grabbed:
-#                     self.stop()
-#                     return
-#                 # add the frame to the queue
-#                 self.Q.put(frame)
-#     def read(self):
-#         # return next frame in the queue
-#         return self.Q.get()
-#     def more(self):
-#         # return True if there are still frames in the queue
-#         return self.Q.qsize() > 0
-#     def stop(self):
-#         # indicate that the thread should be stopped
-#         self.stopped = True
+from sklearn.preprocessing import StandardScaler
+from tensorflow import keras
+sys.path.insert(0, 'H:\Video\PyProject\CombineFeatures')
+import MainCombineFeatures
+
+
+
+def FeatureExtraction(Image :np.ndarray, OutPutName: str, FeatureList: list):
+    OutPutPath = r"H:\Video\PyProject\CombineFeatures\OutPuts"
+    if _IsDataFrameExist is not True:
+        image_dataset = pd.DataFrame()
+        i = -1
+        FeatureSwitcher = MainCombineFeatures.PythonSwitch()
+        # Defect
+        
+        df = pd.DataFrame()
+        for ft in FeatureList:
+            DataFeat = FeatureSwitcher.Method(ft, Image)
+            df1 = pd.DataFrame(columns = [ft + str(j) for j in range(DataFeat.size)]) 
+            df1.loc[0] = DataFeat
+            df = pd.concat([df, df1], axis = 1)
+
+        image_dataset = pd.concat([image_dataset, df])
+            # y = x.index == 0
+            # np.where(np.array(y) == True)[0]
+            # if i == 30:
+            #     break
+        # image_dataset.to_pickle(OutPutPath + "\\" + OutPutName + ".pkl")  
+
+    else :
+        image_dataset = pd.read_pickle(OutPutPath + "\\" + OutPutName +".pkl")
+        image_dataset = pd.DataFrame(image_dataset).fillna(0)
+
+    return image_dataset
+
+# Extract Best Filter 
+JsonPath = 'H:\Video\PyProject\CombineFeatures\OutPuts\BestModelByMaxACC.json'
+with open(JsonPath, 'r') as f:
+    data = json.load(f)
+FiltersName = list(data)[0]
+FeatureNameList = FiltersName.split()
+MachineLModel = pickle.load(open("H:\Video\PyProject\CombineFeatures\OutPuts\BestModel\RandomForest.sav", 'rb'))
+AIModel = keras.models.load_model('H:\Video\PyProject\Model.h5')
+LABLES = ["Deposit", "OpenJoint", "Washing", "Spalling", "Deformation", "AttachedDeposit", "Nothing"]
+# FeatureList = ["HOG", "SIFT"]
 
 Path = r"H:\Video\PyProject\Main\TestFilm\Test.mp4"
 fvs = FileVideoStream(Path, transform = None, queue_size = 128).start()
@@ -65,9 +71,27 @@ while fvs.more():
     i= i+1 #increment counter
     frame = fvs.read()
     if i % 5 == 0:
-        frame = imutils.resize(frame, width=450)
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        frame = np.dstack([frame, frame, frame])
+        Frame = imutils.resize(frame, width=450)
+        Frame = cv2.cvtColor(Frame, cv2.COLOR_BGR2GRAY)
+        Frame = np.dstack([Frame, Frame, Frame])
+        _IsDataFrameExist = False
+        FrameFeature = FeatureExtraction(frame, "Train_" + "_".join(FeatureNameList), FeatureNameList) 
+        # SSTrain = StandardScaler()
+        # SSTrain.fit(FrameFeature)
+        # FrameFeature = SSTrain.transform(FrameFeature)
+        Predict = MachineLModel.predict(FrameFeature)
+        if (Predict[0] == 0): # Defect
+            PrepareFrame =  cv2.resize(Frame, (64, 64))
+            PrepareFrame = PrepareFrame.reshape(-1, 64, 64, 3)
+            AiPredict = AIModel.predict([PrepareFrame])
+            AiPredict[AiPredict>0.5]=1
+            AiPredict[AiPredict<=0.5]=0
+
+            print()#Ai
+        else:
+            print()
+            #No Defect
+
         # display the size of the queue on the frame
         cv2.putText(frame, "Queue Size: {}".format(fvs.Q.qsize()),
             (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)	
