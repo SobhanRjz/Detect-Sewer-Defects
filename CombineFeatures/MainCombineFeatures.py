@@ -31,7 +31,7 @@ from itertools import permutations
 from scipy.cluster.vq import kmeans,vq
 from statistics import mean
 
-_IsDataFrameExist = True
+_IsDataFrameExist = False
 _CreateModel = False
 OutPutPath = r"H:\Video\PyProject\CombineFeatures\OutPuts"
 
@@ -167,7 +167,7 @@ def FeatureExtraction(Images :np.ndarray, OutPutName: str, FeatureList: list):
             # np.where(np.array(y) == True)[0]
             # if i == 30:
             #     break
-        image_dataset.to_pickle(OutPutPath + "\\" + OutPutName + ".pkl")  
+        # image_dataset.to_pickle(OutPutPath + "\\" + OutPutName + ".pkl")  
 
     else :
         image_dataset = pd.read_pickle(OutPutPath + "\\" + OutPutName +".pkl")
