@@ -1,4 +1,5 @@
 ##### Search Feature Matching similarity between two pic
+import json
 import numpy as np 
 import matplotlib.pyplot as plt
 import glob
@@ -28,9 +29,10 @@ from sklearn.preprocessing import StandardScaler
 from skimage.feature import local_binary_pattern
 from itertools import permutations
 from scipy.cluster.vq import kmeans,vq
+from statistics import mean
 
 _IsDataFrameExist = True
-_IsModelExist = False
+_CreateModel = False
 OutPutPath = r"H:\Video\PyProject\CombineFeatures\OutPuts"
 
 def hog_feature(image, n_components = 7, orientations= 12, pixels_per_cell = 16, cells_per_block = 2):
@@ -215,11 +217,10 @@ def LgbModel(x_train, y_train, x_test, y_test):
                 'num_leaves':100,
                 'max_depth':10,
                 'num_class':2} 
-    if _IsModelExist is not True:
-        lgb_model = lgb.train(lgbm_params, d_train, 100) #50 iterations. Increase iterations for small learning rates
+    lgb_model = lgb.train(lgbm_params, d_train, 100) #50 iterations. Increase iterations for small learning rates
+    if _CreateModel is True:
         pickle.dump(lgb_model, open(OutPutPath + "\\" +"LgbModel.sav", 'wb'))
-    else:
-        lgb_model = pickle.load(open(OutPutPath + "\\" +"LgbModel.sav", 'rb'))
+        # lgb_model = pickle.load(open(OutPutPath + "\\" +"LgbModel.sav", 'rb'))
 
     #Predict on test
     test_for_lgb = np.reshape(x_test, (x_test.shape[0], -1))
@@ -231,54 +232,57 @@ def LgbModel(x_train, y_train, x_test, y_test):
     #Print overall accuracy
     from sklearn import metrics
     print ("Accuracy = ", metrics.accuracy_score(y_test, test_prediction))
+    return metrics.accuracy_score(y_test, test_prediction)
 
 def RandomForestModel(x_train, y_train, x_test, y_test):
     #Define the classifier
     RF_model = RandomForestClassifier(n_estimators = 50, random_state = 42)
 
     # Fit the model on training data
-    if _IsModelExist is not True:
-        RF_model.fit(x_train, y_train) #For sklearn no one hot encoding
+    RF_model.fit(x_train, y_train) #For sklearn no one hot encoding
+    if _CreateModel is True:
         pickle.dump(RF_model, open(OutPutPath + "\\" +"RandomForest.sav", 'wb'))
-    else:
-        RF_model = pickle.load(open(OutPutPath + "\\" +"RandomForest.sav", 'rb'))
+        # RF_model = pickle.load(open(OutPutPath + "\\" +"RandomForest.sav", 'rb'))
 
     #Predict on test
     test_for_RF = np.reshape(x_test, (x_test.shape[0], -1))
-    test_for_RF = test_for_RF.iloc[:,:x_train.shape[1]]
+    # test_for_RF = test_for_RF.iloc[:,:x_train.shape[1]]
     test_prediction = RF_model.predict(test_for_RF)
 
     #Print overall accuracy
     print ("Accuracy = ", metrics.accuracy_score(y_test, test_prediction))
-    print(confusion_matrix(y_test,test_prediction))
-    print(classification_report(y_test,test_prediction))#Output
+    # print(confusion_matrix(y_test,test_prediction))
+    # print(classification_report(y_test,test_prediction))#Output
+
+    return metrics.accuracy_score(y_test, test_prediction)
 
 def SVMModel(x_train, y_train, x_test, y_test):
-    # SVM_model = svm.SVC(decision_function_shape='ovo')  #For multiclass classification
-    param_grid = {'C': [0.1,1, 10, 100], 'gamma': [1,0.1,0.01,0.001],'kernel': ['rbf','sigmoid']} # c = 10, gama = 0.001
-    SVM_model = GridSearchCV(SVC(),param_grid,refit=True,verbose=2)
 
-    if _IsModelExist is not True:
-        SVM_model.fit(x_train, y_train) #For sklearn no one hot encoding
+    SVM_model = SVC(C = 0.1, kernel = 'rbf', gamma = 'scale')  #For multiclass classification
+    # param_grid = {'C': [0.1,1, 10, 100], 'gamma': [1,0.1,0.01,0.001],'kernel': ['rbf','sigmoid']} # c = 10, gama = 0.001
+    # SVM_model = GridSearchCV(SVC(),param_grid,refit=True,verbose=2)
+
+    SVM_model.fit(x_train, y_train) #For sklearn no one hot encoding
+    if _CreateModel is True:
         pickle.dump(SVM_model, open(OutPutPath + "\\" +"SVMModel.sav", 'wb'))
-    else:
-        SVM_model = pickle.load(open(OutPutPath + "\\" +"SVMModel.sav", 'rb'))
+        # SVM_model = pickle.load(open(OutPutPath + "\\" +"SVMModel.sav", 'rb'))
 
     #Predict on test
     test_for_svm = np.reshape(x_test, (x_test.shape[0], -1))
     test_prediction = SVM_model.predict(test_for_svm)
 
     #Print overall accuracy
-    print(SVM_model.best_estimator_)
+    # print(SVM_model.best_estimator_)
     print ("Accuracy = ", metrics.accuracy_score(y_test, test_prediction))
-    print(confusion_matrix(y_test,test_prediction))
-    print(classification_report(y_test,test_prediction))#Output
+    # print(confusion_matrix(y_test,test_prediction))
+    # print(classification_report(y_test,test_prediction))#Output
     #Print confusion matrix
     cm = confusion_matrix(y_test, test_prediction)
+    return metrics.accuracy_score(y_test, test_prediction)
     
 
 def Main():
-    
+    global OutPutPath, _CreateModel, _IsDataFrameExist
     SIZE = (500, 300)
     DefectPath = r"H:\Video\VideoAbnormalyDetection\Train\Defects" # This is the path of our positive input dataset
     # define the same for negatives
@@ -294,30 +298,101 @@ def Main():
     # TestFeatures
     test_features = FeatureExtraction(testData, "Test_" + "_".join(FeatureNameList), FeatureNameList)
 
+    # Create Permutation of Feature List
     Combination = []
     for i in range(1,len(FeatureNameList) + 1):
         for group in permutations(FeatureNameList, i):
             Combination.append(' '.join(group))
     print(len(Combination))
-    FeatureDataDic = {}
+
+    # Divide Feature from datafram 
+    FeatureTrainDataDic = {}
+    FeatureTestDataDic = {}
     for FNL in FeatureNameList:
         IndexList = [i for i,x in enumerate(list(train_dataset.columns)) if ''.join([i for i in x if not i.isdigit()]) in FNL]
         temp = train_dataset.iloc[:,IndexList[0] : IndexList[-1] + 1]
-        FeatureDataDic[FNL] = temp
+        FeatureTrainDataDic[FNL] = temp
+    IndexList = []
+    for FNL in FeatureNameList:
+        IndexList = [i for i,x in enumerate(list(test_features.columns)) if ''.join([i for i in x if not i.isdigit()]) in FNL]
+        temp = test_features.iloc[:,IndexList[0] : IndexList[-1] + 1]
+        FeatureTestDataDic[FNL] = temp
+    # Getting dataframe from permutaion algorithm
+    BestResult = {}
+    CountTemp = 0
     for Feat in Combination:
-        Features = Feat.split()
-        df = pd.DataFrame()
-        for d in Features:
-            df1 = FeatureDataDic[d]
-            df = pd.concat([df, df1], axis = 1)
 
+        Features = Feat.split()
+        train_dataset = pd.DataFrame()
+        test_features = pd.DataFrame()
+        for d in Features:
+            df1 = FeatureTrainDataDic[d]
+            df2 = FeatureTestDataDic[d]
+            train_dataset = pd.concat([train_dataset, df1], axis = 1)
+            test_features = pd.concat([test_features, df2], axis = 1)
+
+        # Fit and assign STD
+        SSTrain = StandardScaler()
+        SSTrain.fit(train_dataset)
+        train_dataset = SSTrain.transform(train_dataset)
+        SSTest = StandardScaler()
+        SSTest.fit(test_features)
+        test_features = SSTrain.transform(test_features)
+
+        # Change Labels into numbers
+        le = preprocessing.LabelEncoder()
+        le.fit(trainLabels)
+        train_labels_encoded = le.transform(trainLabels)
+        le.fit(testLabels)
+        test_labels_encoded = le.transform(testLabels)
+        #Split data into test and train datasets (already split but assigning to meaningful convention)
+        #If you only have one dataset then split here
+        x_train, y_train, x_test, y_test = train_dataset, train_labels_encoded, test_features, test_labels_encoded
+        
+        Accuracy1 = RandomForestModel(x_train, y_train, x_test, y_test)
+        Accuracy2 = SVMModel(x_train, y_train, x_test, y_test)
+        Accuracy3 = LgbModel(x_train, y_train, x_test, y_test)
+        Avg = mean([Accuracy1, Accuracy2, Accuracy3])
+        MaxAcc = max([Accuracy1, Accuracy2, Accuracy3])
+        BestResult[Feat] = {"RandomForest": Accuracy1, "SVM" : Accuracy2, "LGB" : Accuracy3, "AvrageAccuracy" : Avg, "MaxAccuracy" : MaxAcc}
+        CountTemp += 1
+        # if CountTemp == 12:
+            # break
+    # Sort Dictionary
+    MaxByAverage = dict(sorted(BestResult.items(), key =lambda x: x[1]["AvrageAccuracy"], reverse = True))
+    MaxByMaxAccuracy = dict(sorted(BestResult.items(), key =lambda x: x[1]["MaxAccuracy"], reverse = True))
+    # Save to Json files
+
+    with open(OutPutPath + "\\" + "BestModelByAvg.json","w") as f:
+        json.dump(MaxByAverage, f, indent = 4)
+
+    with open(OutPutPath + "\\" + "BestModelByMaxACC.json","w") as f:
+        json.dump(MaxByMaxAccuracy, f, indent = 4)
+
+
+    # Create Best Model
+    first_key = list(MaxByMaxAccuracy)[0]
+    first_val = dict(list(MaxByMaxAccuracy.values())[0])
+    BestFilterName = first_key
+    BestModelName = max(first_val, key = first_val.get)
+    Features = BestFilterName.split()
+    train_dataset = pd.DataFrame()
+    test_features = pd.DataFrame()
+    for d in Features:
+        df1 = FeatureTrainDataDic[d]
+        df2 = FeatureTestDataDic[d]
+        train_dataset = pd.concat([train_dataset, df1], axis = 1)
+        test_features = pd.concat([test_features, df2], axis = 1)
+
+    # Fit and assign STD
     SSTrain = StandardScaler()
     SSTrain.fit(train_dataset)
-    train_dataset = SSTrain.transform(train_dataset);
+    train_dataset = SSTrain.transform(train_dataset)
     SSTest = StandardScaler()
     SSTest.fit(test_features)
-    test_features = SSTrain.transform(test_features);
+    test_features = SSTrain.transform(test_features)
 
+    # Change Labels into numbers
     le = preprocessing.LabelEncoder()
     le.fit(trainLabels)
     train_labels_encoded = le.transform(trainLabels)
@@ -326,14 +401,27 @@ def Main():
     #Split data into test and train datasets (already split but assigning to meaningful convention)
     #If you only have one dataset then split here
     x_train, y_train, x_test, y_test = train_dataset, train_labels_encoded, test_features, test_labels_encoded
+    
+    _CreateModel = True
+    OutPutPath += "\\" + "BestModel"
+    Accuracy = 0
+    if BestModelName == "RandomForest":
+        Accuracy = RandomForestModel(x_train, y_train, x_test, y_test)
+    elif BestModelName == "SVM":
+        Accuracy = SVMModel(x_train, y_train, x_test, y_test)
+    else:
+        Accuracy = LgbModel(x_train, y_train, x_test, y_test)
 
 
 
-    RandomForestModel(x_train, y_train, x_test, y_test)
+    print("Best Accuracy is : " + str(Accuracy))
 
-    SVMModel(x_train, y_train, x_test, y_test)
 
-    LgbModel(x_train, y_train, x_test, y_test)
+
+
+
+
+
 
 
 
